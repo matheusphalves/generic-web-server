@@ -1,10 +1,6 @@
 import socket
 from threading import Thread
-
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_socket.bind(('', 5001)) #definição do servidor
-server_socket.listen(5) #quantidade de conexões
-
+from utils.ResponseBuilder import response_builder
 
 #******************************CLASSE DE THREAD COM CLIENTE
 class Client(Thread): #cada instância dessa classe possui um processo em execução para um único cliente
@@ -14,7 +10,6 @@ class Client(Thread): #cada instância dessa classe possui um processo em execu�
         self.lista = ["GET", "HEAD"]
         self.socket_client = socket_client
         self.ip_Adress = ip_Adress 
-        print("[Conexão estabelecida com:", adress,"]")
 
     def run(self):#método é executado ao fazermos Thread.start()
         self.socket_client.setblocking(True)
@@ -22,7 +17,6 @@ class Client(Thread): #cada instância dessa classe possui um processo em execu�
             try: #caso o socket esteja aberto
                 msg = self.socket_client.recv(2000)  
             except:
-                print("[Conexão encerrada com:", adress,"]") #socket está fechado
                 break
             data = msg.decode().split(" ")
             resposta , arq = self.response(data) #recebe corpo response e arquivo requisitado
@@ -38,9 +32,7 @@ class Client(Thread): #cada instância dessa classe possui um processo em execu�
             elif(dado[0]=="HEAD"):
                 return self.head(dado[1:],False) #False: nnao quero receber o arquivo
 
-            return ("HTTP/1.1 405 Method Not Allowed\r\n\r\n", None)
-        else:
-            return ("HTTP/1.1 405 Method Not Allowed\r\n\r\n", None)
+        return (response_builder('HTTP', '1.1', '405', 'Method Not Allowed'), None)
 
     def get(self, dado):
         response, readFile = self.head(dado, True) #recebe cabeçalho do response e arquivo requisitado.
@@ -53,44 +45,34 @@ class Client(Thread): #cada instância dessa classe possui um processo em execu�
             else:
                 response = response + readFile.decode("utf-8") 
                 return (response, None) #página enviada no corpo response
-        return ("HTTP/1.1 404 Bad Request - File not found\r\n\r\n", None)
+        
+        return (response_builder('HTTP', '1.1', '404', 'File not found'), None)
 
 
     def head(self, dado, flag):
         #método retorna cabeçalho de requisição e arquivo solicitado
-        diretorio = str.rpartition(dado[0], ".")#cria lista com diretório do arquivo e extensão
+        directory = str.rpartition(dado[0], ".")#cria lista com diretório do arquivo e extensão
         if(dado[0][0]=="/"): #verifica se path contém / no início (fatiamento de string)
             if(len(dado[0])==1):#retornar index.html da raiz do servidor
                 try:
-                    arquivo = open('index.html', 'rb').read() #leitura como texto
+                    read_file = open('index.html', 'rb').read() #leitura como texto
                 except:
-                    return ("HTTP/1.1 404 Bad Request - File not found\r\n\r\n", None)
+                    return (response_builder('HTTP', '1.1', '404', 'File not found'), None)
             else: 
                 try:#leitura de um arquivo qualquer
-                    diretorio = str.rpartition(dado[0], ".")
-                    arquivo = open(diretorio[0][1:] + "." + diretorio[2], 'rb').read()
+                    directory = str.rpartition(dado[0], ".")
+                    read_file = open(directory[0][1:] + "." + directory[2], 'rb').read()
                 except:
-                    return ("HTTP/1.1 404 Bad Request - File not found\r\n\r\n", None)
+                    return (response_builder('HTTP', '1.1', '404', 'File not found'), None)
 
-            if(arquivo!=None):
+            if(read_file!=None):
                 response = "HTTP/1.1 200 OK\r\n" + "Connection: close\r\n" + \
-                    "Content Lenght:" + str(len(arquivo)) + "\r\nContent Type:" + \
-                        diretorio[1] + diretorio[2] + "\r\n\r\n"
+                    "Content Lenght:" + str(len(read_file)) + "\r\nContent Type:" + \
+                        directory[1] + directory[2] + "\r\n\r\n"
                 if flag:
-                    return (response, arquivo) #retorno response e arquivo lido
+                    return (response, read_file) #returning response and read file
                 else:
-                    return (response, None) #retorno apenas response
+                    return (response, None) #returning only response content
                 
-            else:
-                return ("HTTP/1.1 404 Bad Request - File not found\r\n\r\n", None)
-        return ("HTTP/1.1 400 Bad Request - File not found\r\n\r\n", None)
+        return (response_builder('HTTP', '1.1', '404', 'File not found'), None)
         
-
-
-print('[Iniciado]')
-while True:
-    print("[Aguardando conexão]\n")
-    connection, adress  = server_socket.accept() #retorna socket de conexão realizado e endereço do usuário
-    newProcess = Client(connection, adress) #é criada instância de novo processo
-    newProcess.start() #inicia thread de conexão recebida
-server_socket.close()
